@@ -11,7 +11,7 @@ class CreateProposalsTable extends Migration
      *
      * @return void
      */
-    public function up()
+    public function up(): void
     {
         Schema::create('proposals', function (Blueprint $table) {
             $table->id();
@@ -20,9 +20,11 @@ class CreateProposalsTable extends Migration
             $table->date('birth_date');
             $table->decimal('loan_amount', 10, 2);
             $table->string('pix_key');
+            // A coluna 'status' já estava correta com 'processing'
             $table->enum('status', ['pending', 'processing', 'registered', 'failed'])->default('pending');
             $table->text('registration_error')->nullable();
-            $table->enum('notification_status', ['pending', 'sent', 'failed'])->default('pending');
+            // CORREÇÃO AQUI: Adicionado 'processing' ao enum de notification_status
+            $table->enum('notification_status', ['pending', 'processing', 'sent', 'failed'])->default('pending');
             $table->text('notification_error')->nullable();
             $table->timestamps();
         });

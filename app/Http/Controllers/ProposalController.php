@@ -22,6 +22,10 @@ class ProposalController extends Controller
     public function store(Request $request): JsonResponse
     {
         Log::info('Requisição recebida no ProposalController@store.');
+        // --- ADICIONE ESTAS DUAS LINHAS PARA DEPURAR ---
+        Log::info('Content-Type recebido: ' . $request->header('Content-Type'));
+        Log::info('Corpo da requisição (request->all()): ' . json_encode($request->all()));
+        // ---------------------------------------------
 
         try {
             $validatedData = $request->validate([
@@ -47,7 +51,7 @@ class ProposalController extends Controller
                 Log::info('Proposta criada no banco de dados.', ['proposal_id' => $p->id]);
                 return $p;
             });
-
+ 
             // Jobs são despachados para processamento assíncrono
             RegisterProposalJob::dispatch($proposal->id);
             NotifyProposalJob::dispatch($proposal->id);

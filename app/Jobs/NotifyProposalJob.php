@@ -40,37 +40,50 @@ class NotifyProposalJob implements ShouldQueue
         }
 
         try {
-            // Primeiro, muda o status para 'processing' para indicar que o Job está trabalhando.
             if ($proposal->notification_status === 'pending') {
                 $proposal->notification_status = 'processing';
-                $proposal->save(); // Salva o status 'processing' no banco de dados
+                $proposal->save();
                 Log::info("Proposal {$proposal->id} notification status set to 'processing'.");
             }
 
-            // Realiza a chamada para a API externa de notificação.
-            $response = Http::timeout(5)->post('https://util.devi.tools/api/v1/notify', [
-                'cpf' => $proposal->cpf,
-                'message' => 'Sua proposta de empréstimo foi processada!',
-                'recipient' => $proposal->pix_key,
-            ]);
 
-            // AQUI ESTÁ A LÓGICA CRÍTICA:
-            // SÓ MUDA PARA 'SENT' SE A RESPOSTA DA API FOR DE SUCESSO HTTP (2xx).
-            if ($response->successful()) {
-                $proposal->notification_status = 'sent'; // <--- O status é definido como 'sent' AQUI
+            $simularSucessoNotificacao = true; 
+            $responseSuccessful = $simularSucessoNotificacao;
+
+            if (!$simularSucessoNotificacao) {
+                Log::error("NotifyProposalJob: Simulação de FALHA da API de notificação para proposta {$proposal->id}. Motivo: 'The service is not available, try again later' (simulado).");
+            } else {
+                Log::info("NotifyProposalJob: Simulação de SUCESSO da API de notificação para proposta {$proposal->id}.");
+            }
+
+            if ($responseSuccessful) {
+                $proposal->notification_status = 'sent';
                 $proposal->notification_error = null;
-                $proposal->save(); // <--- E SALVO NO BANCO APENAS APÓS O SUCESSO DA API.
+                $proposal->save();
                 Log::info("Proposal {$proposal->id} notification successfully sent.");
                 return;
             } else {
-                // Se a API não retornar sucesso, lança uma exceção para que o Job seja retentado.
-                $errorMessage = $response->body() ?: 'Unknown error or HTTP error from notification API.';
+                $errorMessage = "Simulação de falha ou erro real da API de notificação.";
                 Log::error("Failed to send notification for proposal {$proposal->id}: {$errorMessage}. Retrying...");
                 throw new \Exception("Failed to send notification: {$errorMessage}");
             }
         } catch (\Exception $e) {
             Log::error("Exception caught in NotifyProposalJob for proposal {$proposal->id}: {$e->getMessage()}. Retrying...");
             throw $e;
+        }
+    }
+
+    /**
+     * Lida com a falha permanente do Job (após esgotar todas as tentativas).
+     */
+    public function failed(\Throwable $exception): void
+    {
+        $proposal = Proposal::find($this->proposalId);
+        if ($proposal) {
+            $proposal->notification_status = 'failed'; // Define como 'failed' se todas as tentativas falharem
+            $proposal->notification_error = 'Job falhou permanentemente após todas as tentativas. Motivo: ' . $exception->getMessage();
+            $proposal->save();
+            Log::critical("NotifyProposalJob: Proposta {$this->proposalId} falhou permanentemente após todas as tentativas. Status definido para 'failed'. Motivo: {$exception->getMessage()}");
         }
     }
 }
